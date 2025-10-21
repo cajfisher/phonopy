@@ -1473,7 +1473,7 @@ class Phonopy:
             The number includes end points. Default is 101.
         plot : Bool, optional
             With setting True, band structure is plotted using matplotlib and
-            the matplotlib module (plt) is returned. To watch the result,
+            the matplotlib module (plt) is returned. To view the result,
             usually ``show()`` has to be called. Default is False.
         write_yaml : Bool
             With setting True, ``band.yaml`` like file is written out. The
@@ -2190,10 +2190,10 @@ class Phonopy:
 
         plot : Bool, optional
             With setting True, PDOS is plotted using matplotlib and the
-            matplotlib module (plt) is returned. To watch the result, usually
+            matplotlib module (plt) is returned. To view the result, usually
             ``show()`` has to be called. Default is False.
         write_dat : Bool
-            With setting True, ``projected_dos.dat`` like file is written out.
+            With setting True, ``projected_dos.dat`` like file is written.
             The  file name can be specified with the ``filename`` parameter.
             Default is False.
         filename : str, optional
