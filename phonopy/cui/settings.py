@@ -39,6 +39,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import re
 from typing import Literal
 
 import numpy as np
@@ -1551,7 +1552,17 @@ class PhonopyConfParser(ConfParser):
                 else:
                     vals = []
                     for index_set in confs["pdos"].split(","):
-                        vals.append([int(x) - 1 for x in index_set.split()])
+                        slice = []
+                        # Remove spaces before and after "-" characters
+                        ins = re.sub(r'\s*-\s*', '-', index_set)
+                        for x in ins.split():
+                            if '-' in x:
+                                start, end = map(int, x.split('-'))
+                                indices = ' '.join(str(i) for i in range(start, end + 1))
+                                slice.extend([int(u)-1 for u in indices.split()])
+                            else:
+                                slice.extend([int(x)-1])
+                        vals.append(slice) 
                     self._set_parameter("pdos", vals)
 
             if conf_key == "xyz_projection":
