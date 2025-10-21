@@ -24,7 +24,7 @@
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL aTHE
 # COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
 # INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
 # BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
@@ -40,6 +40,8 @@ import datetime
 import os
 import pathlib
 import sys
+import re
+from collections import defaultdict
 from typing import Literal
 
 import numpy as np
@@ -329,7 +331,7 @@ def _finalize_phonopy(
                 'in "%s".' % _filename
             )
         else:
-            print('Summary of calculation was written in "%s".' % _filename)
+            print('Summary of calculation was written tn "%s".' % _filename)
         _print_phonopy_end()
     sys.exit(0)
 
@@ -542,7 +544,7 @@ def _write_displacements_files_then_exit(
 
     Note
     ----
-    From phonopy v1.15.0, displacement dataset is written into
+    From phonopy v1.15.0, displacement dataset is written to
     phonopy_disp.yaml.
 
     """
@@ -669,7 +671,7 @@ def _produce_force_constants(
             mlp_eval_filename = "phonopy_mlp_eval_dataset.yaml"
             if log_level:
                 print(
-                    "Dataset generated using MLPs was written in "
+                    "Dataset generated using MLPs was written to "
                     f'"{mlp_eval_filename}".'
                 )
             phonon.save(mlp_eval_filename)
@@ -744,7 +746,7 @@ def _run_MLPSSCHA(phonon: Phonopy, settings: PhonopySettings, log_level: int):
                 print("Initial ", end="")
             else:
                 print("SSCHA ", end="")
-            print(f'force constants are written into "{out_filename}".')
+            print(f'force constants are written to "{out_filename}".')
             print("", flush=True)
 
     phonon.force_constants = ph.force_constants
@@ -775,7 +777,7 @@ def _post_process_force_constants(
     # the force constants are considered to follow space group symmetry.
     if settings.fc_spg_symmetry:
         if log_level:
-            print("Force constants are symmetrized by space group operations.")
+            print("Force constants are being symmetrized by space group operations.")
             print("This may take some time...")
         phonon.symmetrize_force_constants_by_space_group()
         if not load_phonopy_yaml:
@@ -784,7 +786,7 @@ def _post_process_force_constants(
             )
             if log_level:
                 print(
-                    "Symmetrized force constants are written into "
+                    "Symmetrized force constants written to "
                     '"FORCE_CONSTANTS_SPG".'
                 )
 
@@ -810,12 +812,12 @@ def _post_process_force_constants(
                 compression=settings.hdf5_compression,
             )
             if log_level:
-                print('Force constants are written into "force_constants.hdf5".')
+                print('Force constants written to "force_constants.hdf5".')
         else:
             fc = phonon.force_constants
             write_FORCE_CONSTANTS(fc, p2s_map=p2s_map)
             if log_level:
-                print('Force constants are written into "FORCE_CONSTANTS".')
+                print('Force constants written to "FORCE_CONSTANTS".')
                 print("  Array shape of force constants is %s." % str(fc.shape))
                 if fc.shape[0] != fc.shape[1]:
                     print("  Use --full-fc option for full array of force constants.")
@@ -896,7 +898,7 @@ def _create_random_displacements_at_finite_temperature(
             ]
             print("\n".join(msg_lines))
         if log_level < 2:
-            print('Phonon frequencies can be shown by "-v" option.')
+            print('Phonon frequencies can be displayed using option "-v".')
         print()
 
     _write_displacements_files_then_exit(
@@ -1474,7 +1476,7 @@ def _run_calculation(
                     print("band index: %d" % band_index)
                     print("Number of images: %d" % division)
         if log_level:
-            print('Animation was written in "%s". ' % fname_out)
+            print('Animation saved as "%s". ' % fname_out)
 
     #
     # Modulation
@@ -1692,11 +1694,16 @@ def _get_pdos_indices_and_legend(
             xyz_set = np.array(xyz_set)
             legend.append(xyz_set + 1)
             _pdos_indices.append(xyz_set)
-    elif _is_pdos_auto(settings):
-        _pdos_indices = get_pdos_indices(phonon.primitive_symmetry)
-        legend = [phonon.primitive.symbols[x[0]] for x in _pdos_indices]
-    else:
+    else:   
+        if _is_pdos_auto(settings):
+            pdos_indices = get_pdos_indices(phonon.primitive_symmetry)
+        else:
+            pdos_indices = settings.pdos_indices
         legend = [np.array(x) + 1 for x in pdos_indices]
+        elems = [[phonon.primitive.symbols[u] for u in p] for p in pdos_indices]
+        ints_sorted, str_sorted = sort_arrays_by_strings(legend, elems)
+        combined = combine_labels_and_numbers(ints_sorted, str_sorted)
+        legend = contract_elements_by_prefix(combined)
         _pdos_indices = pdos_indices
     return _pdos_indices, legend
 
@@ -1816,6 +1823,83 @@ def _init_phonopy(
     return phonon
 
 
+def sort_arrays_by_strings(int_arrays, str_lists):
+    """Sort each NumPy array based on the alphabetical order of the corresponding string list."""
+    if len(int_arrays) != len(str_lists):
+        raise ValueError("Input lists must be of equal length.")
+
+    sorted_int_arrays = []
+    sorted_str_lists = []
+
+    for int_arr, str_list in zip(int_arrays, str_lists):
+        if len(int_arr) != len(str_list):
+            raise ValueError("Each NumPy array and corresponding string list must be of equal length.")
+
+        sorted_indices = sorted(range(len(str_list)), key=lambda i: str_list[i])
+        sorted_int = int_arr[sorted_indices]
+        sorted_str = [str_list[i] for i in sorted_indices]
+
+        sorted_int_arrays.append(sorted_int)
+        sorted_str_lists.append(sorted_str)
+
+    return sorted_int_arrays, sorted_str_lists
+
+
+def combine_labels_and_numbers(int_arrays, str_lists):
+    """
+    Combine sorted string and integer pairs into formatted strings like "A5 B1 B2".
+    """
+    combined = []
+    for int_arr, str_list in zip(int_arrays, str_lists):
+        parts = [f"{label}{num}" for label, num in zip(str_list, int_arr)]
+        combined.append(" ".join(parts))
+    return combined
+
+
+def compress_numbers(nums):
+    """Convert list of sorted integers into strings with ranges like 1-3, 5."""
+    ranges = []
+    i = 0
+    while i < len(nums):
+        start = nums[i]
+        while i + 1 < len(nums) and nums[i + 1] == nums[i] + 1:
+            i += 1
+        end = nums[i]
+        if end - start >= 2:
+            ranges.append(f"{start}-{end}")
+        else:
+            # One or two elements: write them separately
+            if start == end:
+                ranges.append(str(start))
+            else:
+                ranges.extend([str(start), str(end)])
+        i += 1
+    return ",".join(ranges)
+
+
+def contract_elements_by_prefix(combined_strings):
+    """
+    Contract entries with the same prefix and compress contiguous
+    numbers into hyphenated ranges.
+    E.g., 'B1 B2 B3 A5 A6' 'A5-6 B1-3'
+    """
+    contracted = []
+    for entry in combined_strings:
+        groups = defaultdict(list)
+        tokens = entry.split()
+        for token in tokens:
+            match = re.match(r"([A-Za-z]+)(\d+)", token)
+            if match:
+                prefix, number = match.groups()
+                groups[prefix].append(int(number))
+            else:
+                raise ValueError(f"Token format not recognized: {token}")
+
+        parts = [f"{prefix}{compress_numbers(sorted(groups[prefix]))}" for prefix in sorted(groups)]
+        contracted.append(" ".join(parts))
+    return contracted
+
+
 def main(**argparse_control):
     """Start phonopy.
 
@@ -1926,14 +2010,14 @@ def main(**argparse_control):
         if cell_info.phonopy_yaml is None:
             print_error_message(
                 "'PRIMITIVE_AXES = auto' and 'BAND = auto' "
-                "are not allowed using with MAGMOM."
+                "cannot be used with MAGMOM."
             )
         else:
             print_error_message(str(cell_info.phonopy_yaml.unitcell))
             print_error_message("")
             print_error_message(
                 "'PRIMITIVE_AXES = auto' and 'BAND = auto' "
-                "are not allowed using with magnetic_moments."
+                "cannot be used with magnetic_moments."
             )
         if log_level:
             print_error()
@@ -1976,7 +2060,7 @@ def main(**argparse_control):
             _print_cells(phonon)
         else:
             print(
-                "Use -v option to watch primitive cell, unit cell, "
+                "Use option -v to view primitive cell, unit cell, "
                 "and supercell structures."
             )
         if log_level == 1:
@@ -2161,7 +2245,7 @@ def main(**argparse_control):
 
         print(
             ' The "phonopy" command for running phonon calculations'
-            "will be phased out in "
+            " will be phased out in "
         )
         print(
             ' the future. It is recommended to use the "phonopy-load" command instead.'
