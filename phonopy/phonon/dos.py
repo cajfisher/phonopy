@@ -380,7 +380,7 @@ class ProjectedDos(Dos):
             flip_xy=flip_xy,
         )
 
-    def write(self, filename: str | os.PathLike = "projected_dos.dat"):
+    def write(self, indices=None, filename: str | os.PathLike = "projected_dos.dat"):
         """Write projected DOS to projected_dos.dat."""
         if self._frequency_points is None or self._projected_dos is None:
             raise RuntimeError("Run projected DOS calculation first.")
@@ -393,6 +393,7 @@ class ProjectedDos(Dos):
         write_projected_dos(
             self._frequency_points,
             self._projected_dos,
+            indices=indices,
             comment=comment,
             filename=filename,
         )
@@ -438,7 +439,7 @@ class ProjectedDos(Dos):
 
 
 def get_pdos_indices(symmetry):
-    """Return atomic indieces grouped by symmetry."""
+    """Return atomic indices grouped by symmetry."""
     mapping = symmetry.get_map_atoms()
     return [list(np.where(mapping == i)[0]) for i in symmetry.get_independent_atoms()]
 
@@ -458,6 +459,7 @@ def write_total_dos(
 def write_projected_dos(
     frequency_points: NDArray,
     projected_dos: NDArray,
+    indices = None,
     comment: str | None = None,
     filename: str | os.PathLike = "projected_dos.dat",
 ):
@@ -465,6 +467,19 @@ def write_projected_dos(
     with open(filename, "w") as fp:
         if comment is not None:
             fp.write("# %s\n" % comment)
+
+        if indices is None:
+            num_pdos = len(projected_dos)
+            indices = []
+            for i in range(num_pdos):
+                indices.append([i])
+
+        pdos_data = np.empty((0, len(frequency_points)), float)
+        for n, set_for_sum in enumerate(indices):
+            pdos_sum = np.zeros_like(frequency_points)
+            for i in set_for_sum:
+                pdos_sum += projected_dos[i]
+            pdos_data = np.vstack((pdos_data, pdos_sum))
 
         for freq, pdos in zip(frequency_points, projected_dos.T):
             fp.write("%20.10f" % freq)
