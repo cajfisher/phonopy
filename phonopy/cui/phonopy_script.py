@@ -843,13 +843,13 @@ def _create_random_displacements_at_finite_temperature(
     if file_exists(default_disp_filename, log_level=log_level, is_any=True):
         if log_level:
             print(
-                f'"{default_disp_filename}" is already existing in the '
+                f'"{default_disp_filename}" already exists in the '
                 "current directory."
             )
             disp_filename = "phonopy_rd_disp.yaml"
             if file_exists(disp_filename, log_level=log_level, is_any=True):
                 print(
-                    f'"{disp_filename}" is already existing in the current directory.'
+                    f'"{disp_filename}" already exists in the current directory.'
                 )
                 print(f'Please rename "{default_disp_filename}" or "{disp_filename}".')
                 print_error()
